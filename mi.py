@@ -3,18 +3,9 @@ from mediaimporter import UserChoices
 from mediaimporter import MediaImporter
 #from mediaimporter import Messages
 from mediaimporter import Config
-import kivy
-kivy.require('1.11.1')
-from kivy.app import App
-from kivy.uix.button import Button
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
-from kivy.uix.dropdown import DropDown 
-from kivy.uix.spinner import Spinner
-from kivy.uix.checkbox import CheckBox
-from kivy.uix.togglebutton import ToggleButton
-from kivy.uix.progressbar import ProgressBar
+import tkinter as tk
+from tkinter import ttk
+from tkinter import filedialog
 
 
 
@@ -58,58 +49,87 @@ class console():
 
 
 
-class MainMediaImporterScreen(GridLayout):
-    def __init__(self, **kwargs):
-        super(MainMediaImporterScreen, self).__init__(**kwargs)
+class MainMediaImporterScreen():
+    def __init__(self, frame,  **kwargs):
         
-        config = Config()
-        userChoices = UserChoices()
-        mediaImporter = MediaImporter(userChoices, sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
-        
-        self.cols = 2
-        self.add_widget(Label(text='Source Folder'))
-        # https://kivy.org/doc/stable/api-kivy.uix.filechooser.html
-        self.sourceFolder = TextInput(multiline=False)
-        self.add_widget(self.sourceFolder)
-        self.add_widget(Label(text='Target Folder'))
-        self.targetFolder = TextInput(multiline=False)
-        self.add_widget(self.targetFolder)
-        
-        self.add_widget(Label(text='Folder Style'))
-        #print(mediaImporter.folderStyle, list(config.getFolderStyles()))
-        self.folderStyle = Spinner(text=mediaImporter.folderStyle, values=list(config.getFolderStyles()))
-        self.add_widget(self.folderStyle)
-        self.add_widget(Label(text='File Style'))
-        self.fileStyle = Spinner(text=mediaImporter.fileStyle, values=list(config.getFileStyles()))
-        self.add_widget(self.fileStyle)
-        self.add_widget(Label(text='Separate Year Folder'))
-        self.yearStyle = CheckBox(active=mediaImporter.yearStyle)
-        self.add_widget(self.yearStyle)
-        
-        #TODO: convert projectName default from None to empty string
-        if mediaImporter.projectName is None:
-            mediaImporter.projectName = ''
-        self.add_widget(Label(text='Project Name'))
-        self.projectName = TextInput(text=mediaImporter.projectName, multiline=False)
-        self.add_widget(self.projectName)
-        
-        startButton = Button(text='Start Import')
-        self.add_widget(startButton)
-        stopButton = Button(text='Abort')
-        self.add_widget(stopButton)
-        
-        #https://kivy.org/doc/stable/api-kivy.uix.progressbar.html
-        progressBar = ProgressBar(max=100)
-        self.add_widget(progressBar)
-        
-        self.outputText = TextInput(multiline=True)
-        self.add_widget(self.outputText)
-        
+        self.frame = frame
+        self.config = Config()
+        self.userChoices = UserChoices()
+        self.mediaImporter = MediaImporter(self.userChoices, sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
 
-class MIApp(App):
-    def build(self):
-        return MainMediaImporterScreen()
+        
+        self.sourceFolder = tk.StringVar()
+        self.sourceFolder.set(self.userChoices.sourceFolder)
+        self.sourceFolderLabel = ttk.Label(self.frame, text='Source Folder')
+        self.sourceFolderLabel.pack()
+        self.sourceFolderEntry = ttk.Entry(self.frame, width=60, textvariable=self.sourceFolder)
+        self.sourceFolderEntry.pack()
+        self.sourceFolderButton = ttk.Button(self.frame, text='Browse', command=self.sourceFolderCallback)
+        self.sourceFolderButton.pack()
+        
+        
+        self.targetFolder = tk.StringVar()
+        self.targetFolder.set(self.userChoices.targetFolder)
+        self.targetFolderLabel = ttk.Label(self.frame, text='Target Folder')
+        self.targetFolderLabel.pack()
+        self.targetFolderEntry = ttk.Entry(self.frame, width=60, textvariable=self.targetFolder)
+        self.targetFolderEntry.pack()
+        self.targetFolderButton = ttk.Button(self.frame, text='Browse', command=self.targetFolderCallback)
+        self.targetFolderButton.pack()
 
+        self.folderStyles = list(self.config.getFolderStyles())
+        self.folderStyleLabel = ttk.Label(self.frame, text='Folder Style')
+        self.folderStyleLabel.pack()
+        self.folderStyle = ttk.Combobox(self.frame, width=30, values=self.folderStyles)
+        self.folderStyle.set(self.userChoices.folderStyle)
+        self.folderStyle.pack()
+        self.folderStyle.bind('<<ComboboxSelected>>')
+        
+        self.fileStyles = list(self.config.getFileStyles())
+        self.fileStyleLabel = ttk.Label(self.frame, text='File Style')
+        self.fileStyleLabel.pack()
+        self.fileStyle = ttk.Combobox(self.frame, width=30, values=self.fileStyles)
+        self.fileStyle.set(self.userChoices.fileStyle)
+        self.fileStyle.pack()
+        
+        self.yearStyle = ttk.Checkbutton(self.frame, text='Use Year in Folder Structure?', variable=self.userChoices.yearStyle, onvalue=True, offvalue=False)
+        self.yearStyle.pack()
+        
+        self.startButton = ttk.Button(self.frame, text='Start', command=self.start())
+        self.startButton.pack()
+        
+        self.abortButton = ttk.Button(self.frame, text='Abort', command=self.abort())
+        #self.abortButton.state(['disabled'])
+        self.abortButton.pack()
+
+    def sourceFolderCallback(self):
+        folder = filedialog.askdirectory(title='Please select a directory')
+        #print('folder -%s- %d' %folder %len(folder))
+        #if len(folder) > 1:
+        #    self.sourceFolder.set(folder)
+
+    def targetFolderCallback(self):
+        folder = filedialog.askdirectory(parent=self.frame, initialdir=self.targetFolder, title='Please select a directory')
+        print('folder -%s- %d' %folder %len(folder))
+        #if len(folder) > 1:
+        #    self.targetFolder.set(folder)
+
+    def start(self):
+        #self.abortButton.state(['enabled'])
+        self.mediaImporter.start()
+        #self.abortButton.state(['disabled'])
+        
+    def abort(self):
+        self.mediaImporter.abort()
+        #self.abortButton.state(['disabled'])
+
+class MIApp():
+    def __init__(self, master):
+        master.title = 'MediaImporter'
+        frame = tk.Frame(master)
+        frame.pack(side="top", fill="both", expand = True)
+ 
+        MainMediaImporterScreen(frame)
 
 
 
@@ -136,8 +156,8 @@ def commandLine(args):
     if args.target is None:
         print("Target not defined")
     if (args.source is not None and args.target is not None) and args.defaults.lower() is None:
-        #print("do something here....")
-        cp = console(sourceFolder=args.source, targetFolder=Noargs.targetne, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
+        print("do something here....")
+        #cp = console(sourceFolder=args.source, targetFolder=Noargs.targetne, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
     if args.defaults == True:
         print("do it with mediaimporterconfig.ini defaults....")
         #cp = console(sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
@@ -151,14 +171,14 @@ def main():
     print(args)
     if config.useCON or args.console:
         if args.source or args.defaults:
-            commandLine(args)
-
+            #commandLine(args)
+            pass
     
     
     if config.useGUI:
-        
-
-        MIApp().run()
+        root = tk.Tk()
+        app = MIApp(root)   #.pack(side="top", fill="both", expand=True)
+        root.mainloop()
         #pass
     
 if __name__ == '__main__':
@@ -170,13 +190,3 @@ if __name__ == '__main__':
     
 
     
-"""
-https://kivy.org/doc/stable/installation/installation-windows.html
-python -m pip install docutils pygments pypiwin32 kivy_deps.sdl2==0.1.* kivy_deps.glew==0.1.*
-python -m pip install kivy_deps.gstreamer==0.1.*
-python -m pip install kivy_deps.angle==0.1.*
-python -m pip install kivy==1.11.1
-https://kivy.org/doc/stable/api-kivy.html
-
-D:\Dev\MediaImporter3\share\kivy-examples\demo\kivycatalog
-"""    

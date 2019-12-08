@@ -147,7 +147,7 @@ class MediaImporter():
         self.listener = keyboard.Listener(on_press=self.on_keypress)
         self.listener.start()
 
-        self.Import.start(self.userChoices)
+        #self.Import.start(self.userChoices)
 
         self.listener.stop()
 

@@ -373,6 +373,7 @@ class Tests(unittest.TestCase):
         sample = self.mediaImporter.getSampleTargetPath()
         self.assertEqual(sample, '/Photos/2019_12_25/2019_12_25_15_30_55_1234_NoProjectName.jpg')        
         
+        
     """
     def test_MediaImporter_Start_1(self):
         s = self.mediaImporter.start()
@@ -393,8 +394,6 @@ class Tests(unittest.TestCase):
         self.userChoices.yearStyle = 1
         self.Import.run(self.userChoices)
     """    
-        
-        
-        
+ 
 if __name__ == '__main__':
     unittest.main()
