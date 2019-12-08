@@ -1,0 +1,18 @@
+python -m venv d:\dev\mediaimporter3
+
+.\scripts\activate
+
+python --version
+
+
+pip install...
+unittest
+configparser
+pynput
+pubsub
+kivy
+
+
+python tests.py
+
+python mi.py
