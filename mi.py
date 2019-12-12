@@ -1,4 +1,5 @@
 import argparse
+import time
 from mediaimporter import UserChoices
 from mediaimporter import MediaImporter
 #from mediaimporter import Messages
@@ -6,10 +7,11 @@ from mediaimporter import Config
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
+import threading
+from pubsub import pub
 
 
-
-class console():
+class MICosole():
     
     def __init__(self, sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None):
         
@@ -44,92 +46,134 @@ class console():
         
         #mediaImporter = MediaImporter(yearStyle=False)
         print(mediaImporter.getCountsOfFilesInSource())
-        mediaImporter.start()
+        #wrap with threading
+        mediaImporter.startImport()
+        ######
         print(mediaImporter.getFoldersProcessed())
 
 
 
-class MainMediaImporterScreen():
-    def __init__(self, frame,  **kwargs):
+class MIGUI():
+    def __init__(self, master, **kwargs):
         
-        self.frame = frame
+        self.master = master
         self.config = Config()
         self.userChoices = UserChoices()
+       
         self.mediaImporter = MediaImporter(self.userChoices, sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
-
         
+        self.screenLayout()
+        
+    def screenLayout(self):    
         self.sourceFolder = tk.StringVar()
-        self.sourceFolder.set(self.userChoices.sourceFolder)
-        self.sourceFolderLabel = ttk.Label(self.frame, text='Source Folder')
+        self.sourceFolderLabel = ttk.Label(self.master, text='Source Folder')
         self.sourceFolderLabel.pack()
-        self.sourceFolderEntry = ttk.Entry(self.frame, width=60, textvariable=self.sourceFolder)
+        self.sourceFolderEntry = ttk.Entry(self.master, width=60, textvariable=self.sourceFolder)
+        self.sourceFolder.set(self.userChoices.sourceFolder)
         self.sourceFolderEntry.pack()
-        self.sourceFolderButton = ttk.Button(self.frame, text='Browse', command=self.sourceFolderCallback)
+        self.sourceFolderButton = ttk.Button(self.master, text='Browse', command=self.sourceFolderCallback)
         self.sourceFolderButton.pack()
         
-        
         self.targetFolder = tk.StringVar()
-        self.targetFolder.set(self.userChoices.targetFolder)
-        self.targetFolderLabel = ttk.Label(self.frame, text='Target Folder')
+        self.targetFolderLabel = ttk.Label(self.master, text='Target Folder')
         self.targetFolderLabel.pack()
-        self.targetFolderEntry = ttk.Entry(self.frame, width=60, textvariable=self.targetFolder)
+        self.targetFolderEntry = ttk.Entry(self.master, width=60, textvariable=self.targetFolder)
+        self.targetFolder.set(self.userChoices.targetFolder)
         self.targetFolderEntry.pack()
-        self.targetFolderButton = ttk.Button(self.frame, text='Browse', command=self.targetFolderCallback)
+        self.targetFolderButton = ttk.Button(self.master, text='Browse', command=self.targetFolderCallback)
         self.targetFolderButton.pack()
 
         self.folderStyles = list(self.config.getFolderStyles())
-        self.folderStyleLabel = ttk.Label(self.frame, text='Folder Style')
+        self.folderStyleLabel = ttk.Label(self.master, text='Folder Style')
         self.folderStyleLabel.pack()
-        self.folderStyle = ttk.Combobox(self.frame, width=30, values=self.folderStyles)
+        self.folderStyle = ttk.Combobox(self.master, width=30, values=self.folderStyles)
         self.folderStyle.set(self.userChoices.folderStyle)
         self.folderStyle.pack()
-        self.folderStyle.bind('<<ComboboxSelected>>')
+        self.folderStyle.bind('<<ComboboxSelected>>', self.folderStyleCallback)
         
         self.fileStyles = list(self.config.getFileStyles())
-        self.fileStyleLabel = ttk.Label(self.frame, text='File Style')
+        self.fileStyleLabel = ttk.Label(self.master, text='File Style')
         self.fileStyleLabel.pack()
-        self.fileStyle = ttk.Combobox(self.frame, width=30, values=self.fileStyles)
+        self.fileStyle = ttk.Combobox(self.master, width=30, values=self.fileStyles)
         self.fileStyle.set(self.userChoices.fileStyle)
         self.fileStyle.pack()
+        self.fileStyle.bind('<<ComboboxSelected>>', self.fileStyleCallback)
         
-        self.yearStyle = ttk.Checkbutton(self.frame, text='Use Year in Folder Structure?', variable=self.userChoices.yearStyle, onvalue=True, offvalue=False)
+        self.yearStyleCheck = tk.BooleanVar()
+        self.yearStyle = ttk.Checkbutton(self.master, text='Use Year in Folder Structure?', variable=self.yearStyleCheck, onvalue=True, offvalue=False, command=self.yearStyleCallback)
+        self.yearStyleCheck.set(self.userChoices.yearStyle)
         self.yearStyle.pack()
         
-        self.startButton = ttk.Button(self.frame, text='Start', command=self.start())
+        self.startButton = ttk.Button(self.master, text='Start', command=self.startCallback)
         self.startButton.pack()
         
-        self.abortButton = ttk.Button(self.frame, text='Abort', command=self.abort())
-        #self.abortButton.state(['disabled'])
+        self.abortButton = ttk.Button(self.master, text='Abort', command=self.abortCallback)
+        self.abortButton.state(['disabled'])
         self.abortButton.pack()
+        
+        self.sampleLabel = ttk.Label(self.master, text='Sample')
+        self.sampleLabel.pack()
+        self.sampleText = ttk.Label(self.master, text=self.mediaImporter.getSampleTargetPath())
+        self.sampleText.pack()
+        
+        self.progress = ttk.Progressbar(self.master, length=300)
+        self.progress.pack()
+        
+        pub.subscribe(self.statusListener, 'STATUS')
+        pub.subscribe(self.progressListener, 'PROGRESS')
+        
+    def statusListener(self, status, value):
+        print('MIGUI', status, value)
+        if status == 'copying' and (value == 'finished' or value == 'ABORTED'):
+            self.startButton.state(['!disabled'])
+            self.abortButton.state(['disabled'])
+            
+    def progressListener(self, value):
+        print('Progress %d' % value)
+        self.progress['maximum'] = 100
+        self.progress['value'] = value
 
     def sourceFolderCallback(self):
-        folder = filedialog.askdirectory(title='Please select a directory')
-        #print('folder -%s- %d' %folder %len(folder))
-        #if len(folder) > 1:
-        #    self.sourceFolder.set(folder)
+        folder = filedialog.askdirectory(initialdir=self.sourceFolder.get(), title='Please select the Source Folder')
+        print('folder -%s- %3d' %(folder, len(folder)))
+        if len(folder) > 1:
+            self.sourceFolder.set(folder)
 
     def targetFolderCallback(self):
-        folder = filedialog.askdirectory(parent=self.frame, initialdir=self.targetFolder, title='Please select a directory')
-        print('folder -%s- %d' %folder %len(folder))
-        #if len(folder) > 1:
-        #    self.targetFolder.set(folder)
-
-    def start(self):
-        #self.abortButton.state(['enabled'])
-        self.mediaImporter.start()
-        #self.abortButton.state(['disabled'])
+        folder = filedialog.askdirectory(initialdir=self.targetFolder.get(), title='Please select the Target Folder')
+        print('folder -%s- %3d' %(folder, len(folder)))
+        if len(folder) > 1:
+            self.targetFolder.set(folder)
+            
+    def folderStyleCallback(self, event):
+        self.userChoices.folderStyle = self.folderStyle.get()
+            
+    def fileStyleCallback(self, event):
+        self.userChoices.fileStyle = self.fileStyle.get()   
         
-    def abort(self):
-        self.mediaImporter.abort()
-        #self.abortButton.state(['disabled'])
+    def yearStyleCallback(self):
+        self.userChoices.yearStyle = self.yearStyleCheck.get()
+            
+            
 
-class MIApp():
-    def __init__(self, master):
-        master.title = 'MediaImporter'
-        frame = tk.Frame(master)
-        frame.pack(side="top", fill="both", expand = True)
- 
-        MainMediaImporterScreen(frame)
+    def startCallback(self):
+        print('start')
+        self.abortButton.state(['!disabled'])
+        self.startButton.state(['disabled'])
+        self.x = threading.Thread(target=self.mediaImporter.startImport)
+        self.x.start()
+        
+    def abortCallback(self):
+        print('abort')
+        self.mediaImporter.abortImport()
+
+#class MIGUI():
+#    def __init__(self, master):
+#        master.title = 'MediaImporter'
+#        frame = tk.Frame(master)
+#        frame.pack(side="top", fill="both", expand = True)
+# 
+#        MainMediaImporterScreen(frame)
 
 
 
@@ -149,18 +193,18 @@ def parserCommandLine():
     #parser.print_help()
     return parser
 
-def commandLine(args):
-    """ Run the command line version """
-    if args.source is None:
-        print("Source not defined")
-    if args.target is None:
-        print("Target not defined")
-    if (args.source is not None and args.target is not None) and args.defaults.lower() is None:
-        print("do something here....")
-        #cp = console(sourceFolder=args.source, targetFolder=Noargs.targetne, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
-    if args.defaults == True:
-        print("do it with mediaimporterconfig.ini defaults....")
-        #cp = console(sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
+#def commandLine(args):
+#    """ Run the command line version """
+#    if args.source is None:
+#        print("Source not defined")
+#    if args.target is None:
+#        print("Target not defined")
+#    if (args.source is not None and args.target is not None) and args.defaults.lower() is None:
+#        print("do something here....")
+#        #cp = MICosole(sourceFolder=args.source, targetFolder=Noargs.targetne, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
+#    if args.defaults == True:
+#        print("do it with mediaimporterconfig.ini defaults....")
+#        #cp = MICosole(sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
 
 
 def main():
@@ -170,14 +214,14 @@ def main():
     args = parser.parse_args()
     print(args)
     if config.useCON or args.console:
-        if args.source or args.defaults:
-            #commandLine(args)
-            pass
-    
+        if args.defaults:    # args.source or 
+            cp = MICosole(sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
+            ##commandLine(args)
+            #pass
     
     if config.useGUI:
         root = tk.Tk()
-        app = MIApp(root)   #.pack(side="top", fill="both", expand=True)
+        app = MIGUI(root)   #.pack(side="top", fill="both", expand=True)
         root.mainloop()
         #pass
     

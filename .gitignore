@@ -128,3 +128,6 @@ Include/
 Lib/
 Scripts/
 share/
+test/
+pyvenv.cfg
+pip-selfcheck.json

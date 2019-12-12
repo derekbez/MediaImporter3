@@ -6,19 +6,20 @@ from datetime import datetime, date
 import time
 import pathlib
 import shutil
-import threading
 from pynput import keyboard
 from pubsub import pub
+#import threading
 
 
 class MediaImporter():
     def __init__(self, userChoices=None, sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None):
+                
         if isinstance(userChoices, UserChoices):
             self.userChoices = userChoices
         else:
             self.userChoices = UserChoices()
         self.Config = Config()
-        self.Import = Import()
+        self.Import = Import(self.userChoices)
 
         # sourceFolder takes priority over userChoices.  If both are blank, then get from Config.
         if sourceFolder != None and sourceFolder != '':
@@ -57,10 +58,10 @@ class MediaImporter():
             self.userChoices.projectName = self.Config.userProjectName
         self.__projectName = self.userChoices.projectName
 
-
         pub.subscribe(self.statusListener, 'STATUS')
         pub.subscribe(self.actionsListener, 'ACTIONS')
         pub.subscribe(self.progressListener, 'PROGRESS')
+
 
     def statusListener(self, status, value):
         print(status, value)
@@ -75,7 +76,7 @@ class MediaImporter():
         return self.Import.getFoldersProcessed()
 
     def getCountsOfFilesInSource(self):
-        return self.Import.getCountsOfFilesInSource(self.userChoices)
+        return self.Import.getCountsOfFilesInSource()
 
     def getFileCount(self):
         return self.Import.fileCount
@@ -137,27 +138,27 @@ class MediaImporter():
         self.__projectName = value
         
     def getSampleTargetPath(self):
-        folder = self.Import.makeTargetFolder(self.userChoices, datetime.strptime('2019-12-25', '%Y-%m-%d').timestamp(), 'Photos')
-        file = self.Import.makeTargetFilename(self.userChoices, 'IMG1234ABC.jpg', datetime.strptime('2019-12-25 15:30:55', '%Y-%m-%d %H:%M:%S').timestamp() , 1234)
+        folder = self.Import.makeTargetFolder(datetime.strptime('2019-12-25', '%Y-%m-%d').timestamp(), 'Photos')
+        file = self.Import.makeTargetFilename('IMG1234ABC.jpg', datetime.strptime('2019-12-25 15:30:55', '%Y-%m-%d %H:%M:%S').timestamp() , 1234)
         folder = folder.replace(self.userChoices.targetFolder,'')
         return folder + '/' + file
 
-    def start(self):
+    def startImport(self):
         # https://pypi.org/project/pynput/
         self.listener = keyboard.Listener(on_press=self.on_keypress)
         self.listener.start()
-
-        #self.Import.start(self.userChoices)
-
+        
+        self.Import.start()
+        
         self.listener.stop()
 
 
-    def abort(self):
+    def abortImport(self):
         self.Import.abort()
 
     def on_keypress(self, key):
         if key == keyboard.Key.esc:
-            self.abort()
+            self.abortImport()
 
 
 class UserChoices():
@@ -566,7 +567,8 @@ class Config():
 
 
 class Import():
-    def __init__(self, debug=False):
+    def __init__(self, UserChoices):
+        self.userChoices = UserChoices
         self.Config = Config()
         self.debug = self.Config.useDebug
         self._wantAbort = False
@@ -588,8 +590,8 @@ class Import():
     def typeCount(self, value):
         self.__typeCount = value
 
-    def getCountsOfFilesInSource(self, UserChoices):
-        sourceFolder = UserChoices.sourceFolder
+    def getCountsOfFilesInSource(self):
+        sourceFolder = self.userChoices.sourceFolder
         mediaFiles = {}  #dictionary
         for type_offset,type_name in enumerate(self.Config.MediaTypes):
             count = 0
@@ -643,22 +645,22 @@ class Import():
     def getFileExtension(self, filename):
         return os.path.splitext(filename)[1]
 
-    def makeTargetFolder(self, UserChoices, fileDate, mediaType):
-        target_folder = UserChoices.folderStyle.replace('[type]', mediaType)
-        if UserChoices.yearStyle == True:
+    def makeTargetFolder(self, fileDate, mediaType):
+        target_folder = self.userChoices.folderStyle.replace('[type]', mediaType)
+        if self.userChoices.yearStyle == True:
                             target_folder = target_folder.replace('[date]',time.strftime('%Y',time.localtime(fileDate))+'/[date]')
         target_folder = target_folder.replace('[date]', time.strftime(self.Config.getDateFmt(), time.localtime(fileDate)))
-        target_folder = target_folder.replace('[projectname]', self.cleanProjectName(UserChoices.projectName))
-        target_folder = '/'.join(filter(None,[UserChoices.targetFolder, target_folder]))
+        target_folder = target_folder.replace('[projectname]', self.cleanProjectName(self.userChoices.projectName))
+        target_folder = '/'.join(filter(None,[self.userChoices.targetFolder, target_folder]))
         return target_folder
 
-    def makeTargetFilename(self, UserChoices, fileName, fileDate, count):
-        target_file = UserChoices.fileStyle.replace('[datetime]', time.strftime(self.Config.getDateTimeFmt(), time.localtime(fileDate)))
+    def makeTargetFilename(self, fileName, fileDate, count):
+        target_file = self.userChoices.fileStyle.replace('[datetime]', time.strftime(self.Config.getDateTimeFmt(), time.localtime(fileDate)))
         fileSuffix = self.getFileSuffix(fileName)
         if not fileSuffix.isdigit():
             fileSuffix = '{0:04d}'.format(count)
         target_file = target_file.replace('[origid]', fileSuffix)
-        target_file = target_file.replace('[projectname]', self.cleanProjectName(UserChoices.projectName))
+        target_file = target_file.replace('[projectname]', self.cleanProjectName(self.userChoices.projectName))
         target_file = target_file + self.getFileExtension(fileName)
         return target_file
 
@@ -697,43 +699,41 @@ class Import():
     def abort(self):
         self._wantAbort = True
 
-    def start(self,UserChoices):
-        x = threading.Thread(target=self.runThreaded, args=(UserChoices,))
-        x.start()
-        x.join()
+    def start(self):
+        self._wantAbort = False
+        self.runThreaded()
 
-    def runThreaded(self, UserChoices):
-        self.userChoices = UserChoices
+    def runThreaded(self):
         self.resetFoldersProcessed()
         self.fileCount = 0
-        UserChoices.sourceFolder = self.cleanFolderName(UserChoices.sourceFolder)
-        UserChoices.targetFolder = self.cleanFolderName(UserChoices.targetFolder)
+        self.userChoices.sourceFolder = self.cleanFolderName(self.userChoices.sourceFolder)
+        self.userChoices.targetFolder = self.cleanFolderName(self.userChoices.targetFolder)
 
-        mediaFiles = self.getCountsOfFilesInSource(UserChoices)
+        mediaFiles = self.getCountsOfFilesInSource()
         totalFiles = 0
         for value in mediaFiles.values():
             totalFiles += value
         
-        #if '[projectname]' in UserChoices.fileStyle or '[projectname]' in UserChoices.folderStyle:
-        #    UserChoices.projectName = cleanProjectName(UserChoices.ProjectName)
+        #if '[projectname]' in self.userChoices.fileStyle or '[projectname]' in self.userChoices.folderStyle:
+        #    self.userChoices.projectName = cleanProjectName(self.userChoices.ProjectName)
         
         pub.sendMessage('STATUS', status='copying', value='started')
         for type_offset,type_name in enumerate(self.Config.MediaTypes):
             self.typeCount = 0
             pub.sendMessage('STATUS', status='mediaType', value=type_name)
 
-            for root, dirs, files in os.walk(UserChoices.sourceFolder):
+            for root, dirs, files in os.walk(self.userChoices.sourceFolder):
                 for filename in files:
                     if self._wantAbort:
-                        pub.sendMessage('STATUS', status='abort', value='ABORT')
+                        pub.sendMessage('STATUS', status='copying', value='ABORTED')
                         return
                     if filename.lower().endswith(self.Config.MediaTypeExtensions[type_offset]):
                         self.typeCount += 1
                         pub.sendMessage('STATUS', status='typeCount', value=self.typeCount)
                         sourcePath = '/'.join([root,filename])
                         fileDate = self.getFileDate(sourcePath)
-                        targetFolder = self.makeTargetFolder(UserChoices, fileDate, type_name)
-                        targetFile = self.makeTargetFilename(UserChoices, filename, fileDate, self.typeCount)
+                        targetFolder = self.makeTargetFolder(fileDate, type_name)
+                        targetFile = self.makeTargetFilename(filename, fileDate, self.typeCount)
                         targetPath = '/'.join([targetFolder,targetFile])
 
                         self.fileCount += 1
@@ -749,7 +749,7 @@ class Import():
 
                             pub.sendMessage( 'ACTIONS', source=sourcePath, target=targetPath, action=copyMessage)
 
-                            self.setFoldersProcessed(targetFolder.replace(UserChoices.targetFolder,''))
+                            self.setFoldersProcessed(targetFolder.replace(self.userChoices.targetFolder,''))
                         else:
                             self.fileAction = 'Skipped'
                             #print(sourcePath, targetPath, 'Skipped' )
@@ -758,6 +758,6 @@ class Import():
                         progressPercent = self.fileCount / totalFiles * 100
                         pub.sendMessage('PROGRESS', value=progressPercent)
 
-                    #time.sleep(0.25)
+                    time.sleep(0.1)
 
         pub.sendMessage('STATUS', status='copying', value='finished')
