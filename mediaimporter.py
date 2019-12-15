@@ -64,16 +64,22 @@ class MediaImporter():
 
 
     def statusListener(self, status, value):
-        print(status, value)
+        #print(status, value)
+        pass
 
     def actionsListener(self, source, target, action):
-        print(source, target, action)
+        #print(source, target, action)
+        pass
 
     def progressListener(self, value):
-        print('Progress %d' % value)
+        #print('Progress %d' % value)
+        pass
 
     def getFoldersProcessed(self):
         return self.Import.getFoldersProcessed()
+
+    def getMediaTypes(self):
+        return self.Config.getMediaTypes()
 
     def getCountsOfFilesInSource(self):
         return self.Import.getCountsOfFilesInSource()
@@ -688,7 +694,7 @@ class Import():
     def copyFile(self, sourcePath, targetPath):
         try:
             shutil.copy2(sourcePath, targetPath)
-            if self.debug == True:
+            if self.debug == True and 1==0:
                 raise Exception('debug','copy fail test!')
         except (shutil.Error, IOError, OSError, Exception)  as e:
             #print('Error: %s' % e)

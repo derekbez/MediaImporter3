@@ -7,6 +7,7 @@ from mediaimporter import Config
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
+import tkinter.scrolledtext as tkscrolled
 import threading
 from pubsub import pub
 
@@ -71,8 +72,10 @@ class MIGUI():
         self.sourceFolderEntry = ttk.Entry(self.master, width=60, textvariable=self.sourceFolder)
         self.sourceFolder.set(self.userChoices.sourceFolder)
         self.sourceFolderEntry.pack()
-        self.sourceFolderButton = ttk.Button(self.master, text='Browse', command=self.sourceFolderCallback)
+        self.sourceFolderButton = ttk.Button(self.master, text='Browse', command=self.sourceFolderButtonCallback)
         self.sourceFolderButton.pack()
+        self.sourceFolder.trace('w', self.sourceFolderVarCallback)
+        
         
         self.targetFolder = tk.StringVar()
         self.targetFolderLabel = ttk.Label(self.master, text='Target Folder')
@@ -80,8 +83,9 @@ class MIGUI():
         self.targetFolderEntry = ttk.Entry(self.master, width=60, textvariable=self.targetFolder)
         self.targetFolder.set(self.userChoices.targetFolder)
         self.targetFolderEntry.pack()
-        self.targetFolderButton = ttk.Button(self.master, text='Browse', command=self.targetFolderCallback)
+        self.targetFolderButton = ttk.Button(self.master, text='Browse', command=self.targetFolderButtonCallback)
         self.targetFolderButton.pack()
+        self.targetFolder.trace('w', self.targetFolderVarCallback)
 
         self.folderStyles = list(self.config.getFolderStyles())
         self.folderStyleLabel = ttk.Label(self.master, text='Folder Style')
@@ -104,6 +108,14 @@ class MIGUI():
         self.yearStyleCheck.set(self.userChoices.yearStyle)
         self.yearStyle.pack()
         
+        self.projectName = tk.StringVar()
+        self.projectNameLabel = ttk.Label(self.master, text='Project Name')
+        self.projectNameLabel.pack()
+        self.projectNameEntry = ttk.Entry(self.master, width=60, textvariable=self.projectName)
+        self.projectName.set(self.userChoices.projectName)
+        self.projectNameEntry.pack()
+        self.projectName.trace('w', self.projectNameVarCallback)
+        
         self.startButton = ttk.Button(self.master, text='Start', command=self.startCallback)
         self.startButton.pack()
         
@@ -116,56 +128,129 @@ class MIGUI():
         self.sampleText = ttk.Label(self.master, text=self.mediaImporter.getSampleTargetPath())
         self.sampleText.pack()
         
-        self.progress = ttk.Progressbar(self.master, length=300)
+        self.progress = ttk.Progressbar(self.master, length=500)
         self.progress.pack()
+        
+        self.outputBox = tkscrolled.ScrolledText(self.master, height=15, width=80, wrap='word')
+        self.outputBox.pack()
         
         pub.subscribe(self.statusListener, 'STATUS')
         pub.subscribe(self.progressListener, 'PROGRESS')
+        pub.subscribe(self.actionsListener, 'ACTIONS')
+          
+        self.displayCountOfFilesinSource()
+        self.updateCountOfFilesinSource()
+        
+
+
         
     def statusListener(self, status, value):
-        print('MIGUI', status, value)
+        if self.config.useDebug:
+            self.updateOutputBox('MIGUI -> %s - %s' %(status , value))
         if status == 'copying' and (value == 'finished' or value == 'ABORTED'):
+            self.updateOutputBox('Folders processed:')
+            for folder in self.mediaImporter.getFoldersProcessed():
+                self.updateOutputBox(folder)
             self.startButton.state(['!disabled'])
             self.abortButton.state(['disabled'])
             
+            
+            
     def progressListener(self, value):
-        print('Progress %d' % value)
+        if self.config.useDebug:
+            self.updateOutputBox('Progress %d' % value)
         self.progress['maximum'] = 100
         self.progress['value'] = value
+        
+    def actionsListener(self, source, target, action):
+        self.updateOutputBox('%s -> %s - %s' %(source, target, action))
+        
+   
 
-    def sourceFolderCallback(self):
+    def sourceFolderButtonCallback(self):
         folder = filedialog.askdirectory(initialdir=self.sourceFolder.get(), title='Please select the Source Folder')
-        print('folder -%s- %3d' %(folder, len(folder)))
+        if self.config.useDebug:
+            self.updateOutputBox('folder -%s- %3d' %(folder, len(folder)))
         if len(folder) > 1:
             self.sourceFolder.set(folder)
+            self.updateCountOfFilesinSource()
+            
+    def sourceFolderVarCallback(self, v, l, o):  #https://stackoverflow.com/questions/29690463/what-are-the-arguments-to-tkinter-variable-trace-method-callbacks
+        self.userChoices.sourceFolder = self.sourceFolder.get()
+        self.updateCountOfFilesinSource()
 
-    def targetFolderCallback(self):
+    def targetFolderButtonCallback(self):
         folder = filedialog.askdirectory(initialdir=self.targetFolder.get(), title='Please select the Target Folder')
-        print('folder -%s- %3d' %(folder, len(folder)))
+        self.updateOutputBox('folder -%s- %3d' %(folder, len(folder)))
         if len(folder) > 1:
             self.targetFolder.set(folder)
             
+    def targetFolderVarCallback(self, v, l ,o):
+        self.userChoices.targetFolder = self.targetFolder.get()        
+    
     def folderStyleCallback(self, event):
         self.userChoices.folderStyle = self.folderStyle.get()
+        self.sampleText.config(text = self.mediaImporter.getSampleTargetPath())
             
     def fileStyleCallback(self, event):
-        self.userChoices.fileStyle = self.fileStyle.get()   
+        self.userChoices.fileStyle = self.fileStyle.get()
+        self.sampleText.config(text = self.mediaImporter.getSampleTargetPath())
         
     def yearStyleCallback(self):
         self.userChoices.yearStyle = self.yearStyleCheck.get()
-            
+        self.sampleText.config(text = self.mediaImporter.getSampleTargetPath())
             
 
+    def projectNameVarCallback(self, v, l , o):
+        self.userChoices.projectName = self.projectName.get()
+        self.sampleText.config(text = self.mediaImporter.getSampleTargetPath())            
+
+    def displayCountOfFilesinSource(self):
+        mediaTypes = self.mediaImporter.getMediaTypes()
+        self.mediaTypesVar = []
+        self.countOfFilesVar = []
+        self.mediaTypesLabel = []
+        self.countOfFilesLabel = []
+        i = 0
+        self.updateOutputBox(mediaTypes)
+        for i, mediaType in enumerate(mediaTypes):
+            self.mediaTypesVar.append(tk.StringVar())
+            self.mediaTypesLabel.append(ttk.Label(self.master, textvariable=self.mediaTypesVar[i]))
+            self.mediaTypesVar[i].set(mediaType)
+            self.mediaTypesLabel[i].pack()
+            
+            self.countOfFilesVar.append(tk.IntVar())
+            self.countOfFilesLabel.append(ttk.Label(self.master, textvariable=self.countOfFilesVar[i]))
+            self.countOfFilesVar[i].set(0)
+            self.countOfFilesLabel[i].pack()
+
+    def updateCountOfFilesinSource(self):
+        countOfFiles = self.mediaImporter.getCountsOfFilesInSource()
+        i=0
+        for mediaType, count in countOfFiles.items():
+            if self.mediaTypesVar[i].get() == mediaType:
+                self.countOfFilesVar[i].set(count)
+            else:   
+                self.countOfFilesVar[i].set(-1)   # if the list of mediaTypes goes out of sync for any reason...
+                raise Exception('Media Types list out of sync')
+            i+=1
+
     def startCallback(self):
-        print('start')
+        self.updateOutputBox('start')
         self.abortButton.state(['!disabled'])
         self.startButton.state(['disabled'])
         self.x = threading.Thread(target=self.mediaImporter.startImport)
         self.x.start()
         
     def abortCallback(self):
-        print('abort')
+        self.updateOutputBox('abort')
         self.mediaImporter.abortImport()
+
+    def updateOutputBox(self, textstring):
+        self.outputBox.insert(tk.END, textstring)
+        self.outputBox.insert(tk.END, '\n')
+        self.outputBox.see(tk.END)
+
 
 #class MIGUI():
 #    def __init__(self, master):
