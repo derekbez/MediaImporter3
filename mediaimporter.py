@@ -712,6 +712,8 @@ class Import():
     def runThreaded(self):
         self.resetFoldersProcessed()
         self.fileCount = 0
+        self.fileCountCopied = 0
+        self.fileCountSkipped = 0
         self.userChoices.sourceFolder = self.cleanFolderName(self.userChoices.sourceFolder)
         self.userChoices.targetFolder = self.cleanFolderName(self.userChoices.targetFolder)
 
@@ -723,7 +725,7 @@ class Import():
         #if '[projectname]' in self.userChoices.fileStyle or '[projectname]' in self.userChoices.folderStyle:
         #    self.userChoices.projectName = cleanProjectName(self.userChoices.ProjectName)
         
-        pub.sendMessage('STATUS', status='copying', value='started')
+        pub.sendMessage('STATUS', status='copying', value='Started')
         for type_offset,type_name in enumerate(self.Config.MediaTypes):
             self.typeCount = 0
             pub.sendMessage('STATUS', status='mediaType', value=type_name)
@@ -743,7 +745,7 @@ class Import():
                         targetPath = '/'.join([targetFolder,targetFile])
 
                         self.fileCount += 1
-                        pub.sendMessage('STATUS', status='fileCount', value=self.fileCount)
+                        pub.sendMessage('STATUS', status='fileCount', value=(self.fileCount,self.fileCountCopied,self.fileCountSkipped))
 
                         if not self.targetPathExists(targetFolder):
                             self.createFolder(targetFolder)
@@ -754,16 +756,18 @@ class Import():
                          #   print(sourcePath, targetPath, copyMessage )
 
                             pub.sendMessage( 'ACTIONS', source=sourcePath, target=targetPath, action=copyMessage)
-
+                            self.fileCountCopied += 1
                             self.setFoldersProcessed(targetFolder.replace(self.userChoices.targetFolder,''))
                         else:
                             self.fileAction = 'Skipped'
                             #print(sourcePath, targetPath, 'Skipped' )
                             pub.sendMessage( 'ACTIONS', source=sourcePath, target=targetPath, action='Skipped')
+                            self.fileCountSkipped += 1
 
                         progressPercent = self.fileCount / totalFiles * 100
                         pub.sendMessage('PROGRESS', value=progressPercent)
 
                     time.sleep(0.1)
 
-        pub.sendMessage('STATUS', status='copying', value='finished')
+        pub.sendMessage('STATUS', status='copying', value='Finished')
+        pub.sendMessage('STATUS', status='finishedFileCount', value=(self.fileCount,self.fileCountCopied,self.fileCountSkipped))
