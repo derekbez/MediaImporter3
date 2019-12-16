@@ -8,7 +8,6 @@ import pathlib
 import shutil
 from pynput import keyboard
 from pubsub import pub
-#import threading
 
 
 class MediaImporter():
@@ -722,9 +721,6 @@ class Import():
         for value in mediaFiles.values():
             totalFiles += value
         
-        #if '[projectname]' in self.userChoices.fileStyle or '[projectname]' in self.userChoices.folderStyle:
-        #    self.userChoices.projectName = cleanProjectName(self.userChoices.ProjectName)
-        
         pub.sendMessage('STATUS', status='copying', value='Started')
         for type_offset,type_name in enumerate(self.Config.MediaTypes):
             self.typeCount = 0
@@ -752,22 +748,18 @@ class Import():
 
                         if not self.targetPathExists(targetPath):
                             copyMessage = self.copyFile(sourcePath, targetPath)
-                            self.fileAction = copyMessage
-                         #   print(sourcePath, targetPath, copyMessage )
-
                             pub.sendMessage( 'ACTIONS', source=sourcePath, target=targetPath, action=copyMessage)
                             self.fileCountCopied += 1
                             self.setFoldersProcessed(targetFolder.replace(self.userChoices.targetFolder,''))
                         else:
-                            self.fileAction = 'Skipped'
-                            #print(sourcePath, targetPath, 'Skipped' )
                             pub.sendMessage( 'ACTIONS', source=sourcePath, target=targetPath, action='Skipped')
                             self.fileCountSkipped += 1
 
                         progressPercent = self.fileCount / totalFiles * 100
                         pub.sendMessage('PROGRESS', value=progressPercent)
 
-                    time.sleep(0.1)
+                    if self.Config.useDebug:
+                        time.sleep(0.1)
 
         pub.sendMessage('STATUS', status='copying', value='Finished')
         pub.sendMessage('STATUS', status='finishedFileCount', value=(self.fileCount,self.fileCountCopied,self.fileCountSkipped))

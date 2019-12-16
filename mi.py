@@ -2,7 +2,6 @@ import argparse
 import time
 from mediaimporter import UserChoices
 from mediaimporter import MediaImporter
-#from mediaimporter import Messages
 from mediaimporter import Config
 import tkinter as tk
 from tkinter import ttk
@@ -10,6 +9,68 @@ from tkinter import filedialog
 import tkinter.scrolledtext as tkscrolled
 import threading
 from pubsub import pub
+
+
+def main():
+    config = Config()
+    
+    parser = parserCommandLine()
+    args = parser.parse_args()
+    print(args)
+    if config.useCON or args.console:
+        commandLine(args)
+    
+    if config.useGUI:
+        root = tk.Tk()
+        root.title('Media Importer v3')
+        app = MIGUI(root)  
+        root.mainloop()
+               
+def parserCommandLine():
+    """ The argument parser of the command-line version """
+    parser = argparse.ArgumentParser(description=('Import media files (photos, video, etc) from a Source (SD card) to a Target (hard drive), and rename.'))
+    parser.add_argument('--console', action='store_true'
+                        ,help="Force the console app")
+    parser.add_argument('--defaults', '-D', action='store_true'
+                        ,help="Use Defaults from mediaimporterconfig.ini file.")   
+    parser.add_argument('--source', '-S'
+                        ,help="Source drive and folder")
+    parser.add_argument('--target', '-T'
+                        ,help="Target drive and folder")
+                        
+    parser.add_argument('--folderstyle'
+                        ,help="Folder Style to use.   eg: [type]/[date]   Valid keywords are: [type] [date] [projectname]")
+
+    parser.add_argument('--filestyle'
+                        ,help="Filename Style to use.   eg: [datetime]_[origid]   Valid keywords are: [datetime] [origid] [projectname]")   
+
+    parser.add_argument('--yearstyle'
+                        ,choices=['True','False']
+                        ,help="Whether to use a separate year folder.   eg: Photos/2019/2019_12_25/")  
+
+    parser.add_argument('--project'
+                        ,help="Project Name. Text to be included in Folder Style or Filename Style.")
+
+                        
+    #todo: add other options for folder and file styles
+    #parser.print_help()
+    return parser
+
+def commandLine(args):
+    """ Run the command line version """
+    if args.defaults == True:
+        print("do it with mediaimporterconfig.ini defaults....")
+        cp = MICosole(sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
+    else:
+        cp = MICosole(sourceFolder=args.source
+                    , targetFolder=args.target
+                    , folderStyle=args.folderstyle
+                    , fileStyle=args.filestyle
+                    , yearStyle=args.yearstyle
+                    , projectName=args.project)
+
+
+
 
 
 class MICosole():
@@ -23,35 +84,59 @@ class MICosole():
         self._yearStyle = yearStyle
         self._projectName = projectName
         
-        config = Config()
-        userChoices = UserChoices()
-        userChoices.sourceFolder = 'x:'
-        mediaImporter = MediaImporter(userChoices, sourceFolder=self._sourceFolder
+        self.config = Config()
+        self.userChoices = UserChoices()
+        self.mediaImporter = MediaImporter(self.userChoices, sourceFolder=self._sourceFolder
                                                     , targetFolder=self._targetFolder
                                                     , folderStyle=self._folderStyle
                                                     , fileStyle=self._fileStyle
                                                     , yearStyle=self._yearStyle
                                                     , projectName=self._projectName)
-        userChoices.sourceFolder = 'D:\\Dev\\MediaImporter3\\test\\tempsource'
+    
+               
+        mediaTypes = self.config.getMediaTypes()
+        print('Configured Media Types: ', mediaTypes)
+        print('Configured Folder Styles: ', self.config.getFolderStyles())
+        self.updateOutputBox('Source Folder: %s' %(self.userChoices.sourceFolder))
+        self.updateOutputBox('Target Folder: %s' %(self.userChoices.targetFolder))
+        self.updateOutputBox('Folder Style: %s' %self.userChoices.folderStyle)
+        self.updateOutputBox('File Style: %s' %self.userChoices.fileStyle)
+        self.updateOutputBox('Year Style: %s' %self.userChoices.yearStyle)
+        self.updateOutputBox('Project Name: %s' %self.userChoices.projectName)
+        self.updateOutputBox('Sample path: %s' %self.mediaImporter.getSampleTargetPath())
         
-        mediaTypes = config.getMediaTypes()
-        print(mediaTypes)
-        print(config.getFolderStyles())
-        print('Source Folder %s - %s' %(userChoices.sourceFolder , mediaImporter.sourceFolder))
-        print('Target Folder %s - %s' %(userChoices.targetFolder, mediaImporter.targetFolder))
-        print('Folder Style %s' %userChoices.folderStyle)
-        print('File Style %s' %userChoices.fileStyle)
-        print('Year Style %s' %userChoices.yearStyle)
-        print('Project Name %s' %userChoices.projectName)
-        print('Sample path %s' %mediaImporter.getSampleTargetPath())
+        pub.subscribe(self.statusListener, 'STATUS')
+        pub.subscribe(self.progressListener, 'PROGRESS')
+        pub.subscribe(self.actionsListener, 'ACTIONS')
         
-        #mediaImporter = MediaImporter(yearStyle=False)
-        print(mediaImporter.getCountsOfFilesInSource())
+        
+        #print(mediaImporter.getCountsOfFilesInSource())
         #wrap with threading
-        mediaImporter.startImport()
+        self.mediaImporter.startImport()
         ######
-        print(mediaImporter.getFoldersProcessed())
+        #print(mediaImporter.getFoldersProcessed())
 
+    def statusListener(self, status, value):
+        if self.config.useDebug:
+            self.updateOutputBox('MIGUI -> %s - %s' %(status , value))
+        if status == 'copying':
+            self.updateOutputBox(value)
+        if status == 'copying' and (value == 'Finished' or value == 'ABORTED'):
+            self.updateOutputBox('Summary of Target Folders:')
+            for folder in self.mediaImporter.getFoldersProcessed():
+                self.updateOutputBox(folder)
+        if status == 'finishedFileCount':
+            self.updateOutputBox('Copied %s  Skipped %s' %(value[1], value[2]))  
+            
+    def progressListener(self, value):
+        self.updateOutputBox('Progress %d%%' % value)
+        
+    def actionsListener(self, source, target, action):
+        self.updateOutputBox('%s -> %s - %s' %(source, target, action))
+
+    def updateOutputBox(self, textstring):
+        print(textstring)
+        
 
 
 class MIGUI():
@@ -278,64 +363,8 @@ class MIGUI():
         self.outputBox.see(tk.END)
 
 
-#class MIGUI():
-#    def __init__(self, master):
-#        master.title = 'MediaImporter'
-#        frame = tk.Frame(master)
-#        frame.pack(side="top", fill="both", expand = True)
-# 
-#        MainMediaImporterScreen(frame)
 
 
-
-
-def parserCommandLine():
-    """ The argument parser of the command-line version """
-    parser = argparse.ArgumentParser(description=('Import media files (photos, video, etc) from a Source (SD card) to a Target (hard drive), and rename.'))
-    parser.add_argument('--console', action='store_true'
-                        ,help="Force the console app")
-    parser.add_argument('--defaults', '-D', action='store_true'
-                        ,help="Use Defaults from mediaimporterconfig.ini file.")   
-    parser.add_argument('--source', '-S'
-                        ,help="Source drive and folder")
-    parser.add_argument('--target', '-T'
-                        ,help="Target drive and folder")
-    #todo: add other options for folder and file styles
-    #parser.print_help()
-    return parser
-
-#def commandLine(args):
-#    """ Run the command line version """
-#    if args.source is None:
-#        print("Source not defined")
-#    if args.target is None:
-#        print("Target not defined")
-#    if (args.source is not None and args.target is not None) and args.defaults.lower() is None:
-#        print("do something here....")
-#        #cp = MICosole(sourceFolder=args.source, targetFolder=Noargs.targetne, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
-#    if args.defaults == True:
-#        print("do it with mediaimporterconfig.ini defaults....")
-#        #cp = MICosole(sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
-
-
-def main():
-    config = Config()
-    
-    parser = parserCommandLine()
-    args = parser.parse_args()
-    print(args)
-    if config.useCON or args.console:
-        if args.defaults:    # args.source or 
-            cp = MICosole(sourceFolder=None, targetFolder=None, folderStyle=None, fileStyle=None, yearStyle=None, projectName=None)
-            ##commandLine(args)
-            #pass
-    
-    if config.useGUI:
-        root = tk.Tk()
-        root.title('Media Importer v3')
-        app = MIGUI(root)   #.pack(side="top", fill="both", expand=True)
-        root.mainloop()
-        #pass
     
 if __name__ == '__main__':
     main()
