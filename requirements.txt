@@ -1,2 +1,3 @@
-pynput==1.4.5
+pynput==1.6.0
 Pypubsub==4.0.3
+six==1.13.0
