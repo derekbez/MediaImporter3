@@ -246,9 +246,20 @@ class Config():
             self.write_file()
 
         #defaults
-        self.debug_default = '1'
+        self.debug_default = '0'
         self.con_default = '0'
         self.gui_default = '1'
+        
+        if platform.system() == 'Darwin':   # Mac OS
+            self.folder_default = '/Volumes/'
+        elif platform.system() == 'Linux':
+            self.folder_default = '/Media/'
+        elif platform.system() == 'Windows':
+            self.folder_default = 'D:/'
+        else:
+            self.folder_default = './'
+        
+        
         self.media_types_default = ('Photos','Videos','Audio')
         self.media_type_extensions_default = (('3fr', 'ari', 'arw', 'srf', 'sr2', 'bay', 'cri', 'crw', 'cr2', 'cr3', 'cap', 'iiq', 'eip', 'dcs', 'dcr', 'drf', 'k25', 'kdc', 'dng', 'erf', 'fff', 'mef', 'mdc', 'mos', 'mrw', 'nef', 'nrw', 'orf', 'pef', 'ptx', 'pxn', 'R3D', 'raf', 'raw', 'rw2', 'raw', 'rwl', 'dng', 'rwz', 'srw', 'x3f', 'x3f','jpg','tif'), \
         ('mp4','mov','flv','wmv','avi'), \
@@ -446,7 +457,7 @@ class Config():
     def getSourceFolder(self):
         self.read_file()
         if not self.config.has_option('USER','source_folder'):
-            self.config['USER']['source_folder'] = 'x:\\'
+            self.config['USER']['source_folder'] = self.folder_default+'source'
             self.write_file()
             #print('created missing user option : source_folder')
         s = self.config.get('USER','source_folder')
@@ -466,7 +477,7 @@ class Config():
     def getTargetFolder(self):
         self.read_file()
         if not self.config.has_option('USER','target_folder'):
-            self.config['USER']['target_folder'] = 'y:\\'
+            self.config['USER']['target_folder'] = self.folder_default+'target'
             self.write_file()
             #print('created missing user option : target_folder')
         s = self.config.get('USER','target_folder')
@@ -675,6 +686,12 @@ class Import():
             folderName = folderName[:-1]
         return folderName
         
+    def validFolders(self, sourceFolder, targetFolder):
+        # prevent situation where source folder is subset of target, thus possible recusion
+        if targetFolder.find(sourceFolder, 0, len(sourceFolder)) < 0:
+            return True
+        return False
+        
     def cleanProjectName(self, projectName):
         if projectName == None:
             return 'NoProjectName'
@@ -720,6 +737,10 @@ class Import():
         totalFiles = 0
         for value in mediaFiles.values():
             totalFiles += value
+        
+        if self.validFolders(self.userChoices.sourceFolder, self.userChoices.targetFolder) == False:
+            pub.sendMessage('STATUS', status='copying', value='Error: Source and Target folders not valid')
+            return
         
         pub.sendMessage('STATUS', status='copying', value='Started')
         for type_offset,type_name in enumerate(self.Config.MediaTypes):

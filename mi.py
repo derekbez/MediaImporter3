@@ -51,8 +51,7 @@ def parserCommandLine():
     parser.add_argument('--project'
                         ,help="Project Name. Text to be included in Folder Style or Filename Style.")
 
-                        
-    #todo: add other options for folder and file styles
+
     #parser.print_help()
     return parser
 
@@ -259,7 +258,7 @@ class MIGUI():
             self.updateOutputBox('MIGUI -> %s - %s' %(status , value))
         if status == 'copying':
             self.updateOutputBox(value)
-        if status == 'copying' and (value == 'Finished' or value == 'ABORTED'):
+        if status == 'copying' and (value == 'Finished' or value == 'ABORTED' or value.find('Error') >= 0 ):
             self.updateOutputBox('Summary of Target Folders:')
             for folder in self.mediaImporter.getFoldersProcessed():
                 self.updateOutputBox(folder)
@@ -293,7 +292,8 @@ class MIGUI():
 
     def targetFolderButtonCallback(self):
         folder = filedialog.askdirectory(initialdir=self.targetFolder.get(), title='Please select the Target Folder')
-        self.updateOutputBox('folder -%s- %3d' %(folder, len(folder)))
+        if self.config.useDebug:
+            self.updateOutputBox('folder -%s- %3d' %(folder, len(folder)))
         if len(folder) > 1:
             self.targetFolder.set(folder)
             

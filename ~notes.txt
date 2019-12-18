@@ -1,18 +1,56 @@
+set up environment:
+
+github desktop
+> create new repository
+    name = MediaImporter3
+    description = Import media files - photos, videos, audio - into appropriate locations, and rename the files consistently.
+    ignore = python
+
+edit .getignore
+    append:
+Include/
+Lib/
+Scripts/
+share/
+
 python -m venv d:\dev\mediaimporter3
 
 .\scripts\activate
 
 python --version
 
+copy requirements.txt 
+   (pip freeze > requirements.txt)
+   
+python -m pip install --upgrade pip
+pip install -r requirements.txt   
+   or manually pip install...
+        unittest
+        configparser
+        pynput
+        pubsub
+        threading
+        Queue
 
-pip install...
-unittest
-configparser
-pynput
-pubsub
-kivy
 
 
 python tests.py
 
 python mi.py
+
+
+git https://github.com/derekbez/MediaImporter3.git
+
+
+https://packaging.python.org/tutorials/installing-packages/
+
+
+https://stackoverflow.com/questions/16745507/tkinter-how-to-use-threads-to-preventing-main-event-loop-from-freezing
+http://stupidpythonideas.blogspot.com/2013/10/why-your-gui-app-freezes.html
+
+
+rpi
+https://linuxconfig.org/how-to-change-from-default-to-alternative-python-version-on-debian-linux
+https://www.tecmint.com/find-usb-device-name-in-linux/
+
+
