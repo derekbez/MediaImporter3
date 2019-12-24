@@ -53,4 +53,8 @@ rpi
 https://linuxconfig.org/how-to-change-from-default-to-alternative-python-version-on-debian-linux
 https://www.tecmint.com/find-usb-device-name-in-linux/
 
+for sd card exfat support
+sudo apt-get install exfat-fuse
+sudo apt-get install exfat-utils
+
 
