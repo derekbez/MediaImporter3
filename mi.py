@@ -374,8 +374,7 @@ class MIGUI():
 
         self.content.update()
         self.root.geometry('%dx%d' %(self.content.winfo_width(), self.determineHeightFromScreen()))
-        if screenWidth<=800:
-            self.root.attributes('-fullscreen', True)
+
         #self.root.geometry('%dx%d' %(self.determineWidthFromScreen(), self.determineHeightFromScreen()))
         #print('screen %dx%d' %(self.determineWidthFromScreen(), self.determineHeightFromScreen()))
         #print('self.root.geometry() %s' %self.root.geometry())
