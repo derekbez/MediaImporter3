@@ -21,9 +21,24 @@ def main():
         commandLine(args)
 
     if config.useGUI:
+        preroot = tk.Tk() 
+        preroot.update_idletasks()
+        preroot.attributes('-fullscreen', True)
+        preroot.state('iconic')
+        geometry = preroot.winfo_geometry()
+        preroot.destroy()
+        
+        global screenWidth
+        global screenHeight
+        x = geometry.split('+')  # 2048x1152+0+0
+        geometryList = x[0].split('x')
+        screenWidth = int(geometryList[0])
+        screenHeight = int(geometryList[1])
+        #print(screenWidth, screenHeight)
+        
         root = tk.Tk()
-        root.title('Media Importer v3')
-        root.attributes("-topmost", True)
+        root.title('Media Importer v3') 
+
         app = MIGUI(root)
         root.mainloop()
 
@@ -140,9 +155,8 @@ class MICosole():
 
 
 class MIGUI():
-    def __init__(self, master, **kwargs):
-
-        self.master = master
+    def __init__(self, root, **kwargs):
+        self.root = root
         self.config = Config()
         self.userChoices = UserChoices()
 
@@ -255,12 +269,15 @@ class MIGUI():
         self.outputBox.grid(row=9, column=0, sticky=(tk.E,tk.W), pady=5, padx=2, columnspan=3)
 
     def screenLayoutPack(self):
-        self.content = ttk.Frame(self.master, padding=(3,3,12,6))   #, bg='red'
-        self.content.pack(side = tk.TOP, fill = tk.BOTH, expand = True)
+        self.contentFrame = ttk.Frame(self.root) #, padding=(3,3,12,6))  
+        self.contentFrame.pack(side = tk.TOP, fill = tk.BOTH, expand = True)
+
+        self.content = Scrollable(self.contentFrame)   
+        #self.content.configure(background='black')
 
         self.sourceFolderFrame = ttk.Frame(self.content)
         self.sourceFolderFrame.pack(side = tk.TOP, anchor = tk.NW, expand = True, pady = 3)
-
+        
         self.targetFolderFrame = ttk.Frame(self.content)
         self.targetFolderFrame.pack(side = tk.TOP, anchor = tk.NW, expand = True, pady = 3)
 
@@ -279,14 +296,11 @@ class MIGUI():
         self.buttonsFrame = ttk.Frame(self.content)
         self.buttonsFrame.pack(side = tk.TOP, anchor = tk.NW, expand = True, pady = 3)
 
-        outboxWidth = self.determineWidthFromScreen()
-        #outboxWidth = 300
-        leftOrTop = self.determineLeftOrTop()
-        self.outputBoxFrame = ttk.Frame(self.content, width=outboxWidth, height=380)
-        self.outputBoxFrame.pack(side = tk.TOP, anchor = tk.NW)
-        self.outputBoxFrame.pack_propagate(0)
-        #https://stackoverflow.com/questions/563827/how-to-stop-tkinter-frame-from-shrinking-to-fit-its-contents
+        self.outputBoxFrame = ttk.Frame(self.content)
+        self.outputBoxFrame.pack(side = tk.TOP, anchor = tk.NW, expand = True, pady = 3)
 
+        leftOrTop = self.determineLeftOrTop()
+        
         self.sourceFolder = tk.StringVar()
         self.sourceFolderLabel = ttk.Label(self.sourceFolderFrame, text='Source Folder:')
         self.sourceFolderLabel.pack(side = leftOrTop, anchor = tk.NW, padx=3)
@@ -349,42 +363,41 @@ class MIGUI():
         self.abortButton.pack(side = tk.LEFT, anchor = tk.NW, padx=3)
 
         self.progress = ttk.Progressbar(self.outputBoxFrame)
-        self.progress.pack(side = tk.TOP, expand = True, fill = tk.X, pady = 3)
+        self.progress.pack(side = tk.TOP, expand = True, fill = tk.X, padx = 3)
 
         self.outputBox = tkscrolled.ScrolledText(self.outputBoxFrame, wrap='word')
-        self.outputBox.pack(side = tk.TOP, expand = True, fill = tk.BOTH, pady = 3)
+        self.outputBox.pack(side = tk.TOP, expand = True, fill = tk.BOTH, padx = 3)
+
+        outboxWidth = self.determineWidthFromScreen() - 24
+        self.outputBoxspacer = tk.Frame(self.outputBoxFrame, width=outboxWidth, height=1)
+        self.outputBoxspacer.pack()
+
+        self.content.update()
+        self.root.geometry('%dx%d' %(self.content.winfo_width(), self.determineHeightFromScreen()))
+        #self.root.geometry('%dx%d' %(self.determineWidthFromScreen(), self.determineHeightFromScreen()))
+        #print('screen %dx%d' %(self.determineWidthFromScreen(), self.determineHeightFromScreen()))
+        #print('self.root.geometry() %s' %self.root.geometry())
+        #print('self.content.winfo_width() %s' %self.content.winfo_width())  
+        #print('outbox %d %d' %(self.outputBoxFrame.winfo_width(), self.outputBoxFrame.winfo_height()))
 
     def determineWidthFromScreen(self):
-        geometry = self.get_curr_screen_geometry()
-        screenWidth = geometry.split('x')
-        if int(screenWidth[0]) < 850:
-            return int(screenWidth[0])
+        if screenWidth < 800:
+            return screenWidth
         else:
-            return 850
+            return 960
+            
+    def determineHeightFromScreen(self):
+        if screenHeight <= 800:
+            return 800
+        else:
+            return 640       
             
     def determineLeftOrTop(self):
-        geometry = self.get_curr_screen_geometry()
-        screenWidth = geometry.split('x')
-        if int(screenWidth[0]) < 850: # or 1==1:
+        if screenWidth < 800: # or 1==1:
             return 'top'
         else:
             return 'left'
 
-    def get_curr_screen_geometry(self):
-        """
-        Workaround to get the size of the current screen in a multi-screen setup.
-        Returns:
-            geometry (str): The standard Tk geometry string.
-                [width]x[height]+[left]+[top]
-        https://stackoverflow.com/questions/3129322/how-do-i-get-monitor-resolution-in-python/56913005#56913005
-        """
-        root = tk.Tk()
-        root.update_idletasks()
-        root.attributes('-fullscreen', True)
-        root.state('iconic')
-        geometry = root.winfo_geometry()
-        root.destroy()
-        return geometry
 
     def statusListener(self, status, value):
         if self.config.useDebug:
@@ -501,8 +514,41 @@ class MIGUI():
         self.outputBox.insert(tk.END, '\n')
         self.outputBox.see(tk.END)
 
+class Scrollable(ttk.Frame):
+    """
+       Make a frame scrollable with scrollbar on the right.
+       After adding or removing widgets to the scrollable frame, 
+       call the update() method to refresh the scrollable area.
+       https://stackoverflow.com/questions/3085696/adding-a-scrollbar-to-a-group-of-widgets-in-tkinter
+    """
+    def __init__(self, frame, width=16):
+        scrollbar = tk.Scrollbar(frame, width=width)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y, expand=False)
 
+        self.canvas = tk.Canvas(frame, yscrollcommand=scrollbar.set)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
+        scrollbar.config(command=self.canvas.yview)
+
+        self.canvas.bind('<Configure>', self.__fill_canvas)
+
+        # base class initialization
+        ttk.Frame.__init__(self, frame)         
+
+        # assign this obj (the inner frame) to the windows item of the canvas
+        self.windows_item = self.canvas.create_window(0,0, window=self, anchor=tk.NW)
+        
+    def __fill_canvas(self, event):
+        "Enlarge the windows item to the canvas width"
+        canvas_width = event.width
+        self.canvas.itemconfig(self.windows_item, width = canvas_width)  
+        #print('canvas %s' %canvas_width)
+
+    def update(self):
+        "Update the canvas and the scrollregion"
+        self.update_idletasks()
+        self.canvas.config(scrollregion=self.canvas.bbox(self.windows_item))
+        #print('canvas winfo_width %s' %self.canvas.winfo_width())
 
 
 if __name__ == '__main__':
