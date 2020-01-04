@@ -1,5 +1,4 @@
 import argparse
-import time
 from mediaimporter import UserChoices
 from mediaimporter import MediaImporter
 from mediaimporter import Config
@@ -10,6 +9,7 @@ import tkinter.scrolledtext as tkscrolled
 import threading
 from pubsub import pub
 
+__version__ = '3.20200104'
 
 def main():
     config = Config()
@@ -37,7 +37,7 @@ def main():
         #print(screenWidth, screenHeight)
         
         root = tk.Tk()
-        root.title('Media Importer v3') 
+        root.title('Media Importer v%s' %__version__) 
 
         app = MIGUI(root)
         root.mainloop()
@@ -83,9 +83,6 @@ def commandLine(args):
                     , fileStyle=args.filestyle
                     , yearStyle=args.yearstyle
                     , projectName=args.project)
-
-
-
 
 
 class MICosole():
@@ -151,8 +148,6 @@ class MICosole():
 
     def updateOutputBox(self, textstring):
         print(textstring)
-
-
 
 class MIGUI():
     def __init__(self, root, **kwargs):

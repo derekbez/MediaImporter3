@@ -3,6 +3,7 @@ import re
 import configparser
 import platform
 from datetime import datetime, date
+# TODO replace time.strftime in makeTargetFolder/Filename with datetime equiv
 import time
 import pathlib
 import shutil
@@ -259,12 +260,11 @@ class Config():
         else:
             self.folder_default = './'
         
-        
         self.media_types_default = ('Photos','Videos','Audio')
         self.media_type_extensions_default = (('3fr', 'ari', 'arw', 'srf', 'sr2', 'bay', 'cri', 'crw', 'cr2', 'cr3', 'cap', 'iiq', 'eip', 'dcs', 'dcr', 'drf', 'k25', 'kdc', 'dng', 'erf', 'fff', 'mef', 'mdc', 'mos', 'mrw', 'nef', 'nrw', 'orf', 'pef', 'ptx', 'pxn', 'R3D', 'raf', 'raw', 'rw2', 'raw', 'rwl', 'dng', 'rwz', 'srw', 'x3f', 'x3f','jpg','tif'), \
         ('mp4','mov','flv','wmv','avi'), \
         ('mp3','wav','au','aiff','wma','aac','flac','m4a'))
-        self.folder_styles_default = ('[type]/[date]','[date]/[type]','[date]','[type]','[projectname]/[type]/[date]')
+        self.folder_styles_default = ('[type]/[date]','[date]/[type]','[date]','[type]','[projectname]/[type]/[date]','[projectname]/[type]','[type]/[date]_[projectname]')
         self.file_styles_default = ('[datetime]_[origid]','[datetime]', '[datetime]_[origid]_[projectname]')
         self.folder_year_style_default = 1
         self.date_fmt_default = '%Y_%m_%d'
@@ -558,7 +558,7 @@ class Config():
             #print('created missing user option : project_name')
         s = self.config.get('USER','project_name')
         if s == '##None##':
-            s = None
+            s = ''  #None
         return s
     @property
     def userProjectName(self):
@@ -668,6 +668,7 @@ class Import():
         target_folder = target_folder.replace('[date]', time.strftime(self.Config.getDateFmt(), time.localtime(fileDate)))
         target_folder = target_folder.replace('[projectname]', self.cleanProjectName(self.userChoices.projectName))
         target_folder = '/'.join(filter(None,[self.userChoices.targetFolder, target_folder]))
+        target_folder = self.cleanFolderName(target_folder)
         return target_folder
 
     def makeTargetFilename(self, fileName, fileDate, count):
@@ -677,14 +678,36 @@ class Import():
             fileSuffix = '{0:04d}'.format(count)
         target_file = target_file.replace('[origid]', fileSuffix)
         target_file = target_file.replace('[projectname]', self.cleanProjectName(self.userChoices.projectName))
+        target_file = self.cleanFileName(target_file)
         target_file = target_file + self.getFileExtension(fileName)
         return target_file
 
     def cleanFolderName(self, folderName):
         folderName = folderName.replace('\\','/')
+        folderName = folderName.replace('//','/')
         if (folderName[-1:] == '/'):
             folderName = folderName[:-1]
+        if (folderName[-1:] == '_'):
+            folderName = folderName[:-1]    
         return folderName
+        
+    def cleanFileName(self, fileName):
+        fileName = re.sub(' ', '_', fileName)
+        fileName = re.sub('[^0-9a-zA-Z-._]+', '', fileName)
+        if (fileName[-1:] == '/'):
+            fileName = fileName[:-1]
+        if (fileName[-1:] == '_'):
+            fileName = fileName[:-1]     
+        return fileName    
+    
+    def cleanProjectName(self, projectName):
+        if projectName == None:
+            return ''   #'NoProjectName'
+        projectName = re.sub(' ', '_', projectName)
+        projectName = re.sub('[^0-9a-zA-Z-._]+', '', projectName)
+        if len(projectName) == 0:
+            projectName = '' # 'InvalidProjectName'
+        return projectName
         
     def validFolders(self, sourceFolder, targetFolder):
         # prevent situation where source folder is subset of target, thus possible recusion
@@ -692,15 +715,6 @@ class Import():
             return True
         return False
         
-    def cleanProjectName(self, projectName):
-        if projectName == None:
-            return 'NoProjectName'
-        projectName = re.sub(' ', '_', projectName)
-        projectName = re.sub('[^0-9a-zA-Z-._]+', '', projectName)
-        if len(projectName) == 0:
-            projectName = 'InvalidProjectName'
-        return projectName
-
     def targetPathExists(self, pathName):
         return pathlib.Path(pathName).exists()
 

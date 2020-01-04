@@ -49,6 +49,9 @@ https://stackoverflow.com/questions/16745507/tkinter-how-to-use-threads-to-preve
 http://stupidpythonideas.blogspot.com/2013/10/why-your-gui-app-freezes.html
 
 
+pyinstaller -F mi.py
+
+
 rpi
 https://linuxconfig.org/how-to-change-from-default-to-alternative-python-version-on-debian-linux
 https://www.tecmint.com/find-usb-device-name-in-linux/
